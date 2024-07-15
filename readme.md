@@ -20,6 +20,6 @@ for file
 - pdf_merge
 
 
-## License
+## LICENSE
 
-MIT
+MIT LICENSE
