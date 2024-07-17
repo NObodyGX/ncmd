@@ -1,4 +1,9 @@
+mod cmd;
+mod utils;
+
 use clap::{Args, Parser, Subcommand};
+
+
 
 #[derive(Debug, Parser)]
 #[command(name = "ncmd")]
@@ -52,13 +57,16 @@ fn main() {
         }
         Commands::Rename(rename) => {
             let idir = rename.idir;
-            let r = rename.recursion;
-            let p = rename.preview;
             let name = match rename.name {
                 Some(name) => {name},
                 None => "".to_string(),
             }; 
-            println!("Rename {idir}, name: {name}, {r} {p}");
+            let r = rename.recursion;
+            let p = rename.preview;
+            let mut v: Vec<String> = Vec::new();
+            v.push("jpg".to_string());
+            v.push("png".to_string());
+            cmd::g_renames(&idir, &v, name, r, p);
         }
     }
 
