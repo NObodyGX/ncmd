@@ -74,6 +74,53 @@ fn get_hash_name(name: &String) -> String {
     format!("{}_{}", name, hashd)
 }
 
+fn do_rename(mut rmaps: HashMap<&PathBuf, String>) {
+    let mut rmkeys:Vec<&PathBuf> = Vec::new();
+    loop {
+        rmkeys.clear();
+        for (k, v) in rmaps.iter() {
+            let pbuf = PathBuf::from(v);
+            if pbuf.exists() {
+                continue;
+            }
+            match fs::rename(k, pbuf) {
+                Ok(_v) => {
+                    rmkeys.push(k);
+                }   
+                Err(e) => {
+                    println!("{}", e);
+                }
+            }
+        }
+        if rmkeys.len() == rmaps.len() {
+            break;
+        }
+        if rmkeys.len() == 0 && rmaps.len() != 0 {
+            for (k, v) in rmaps.iter() {
+                match fs::rename(k, get_hash_name(v)) {
+                    Ok(_v) => {}   
+                    Err(e) => {
+                        println!("{}", e);
+                    }
+                }
+            }
+            for (_k, v) in rmaps.iter() {
+                match fs::rename(get_hash_name(v), v) {
+                    Ok(_v) => {
+                    }   
+                    Err(e) => {
+                        println!("{}", e);
+                    }
+                }
+            }
+            break;
+        }
+        for k in rmkeys.iter() {
+            rmaps.remove(k);
+        }
+    }
+}
+
 #[allow(dead_code)]
 pub fn g_rename(idir: &String, suffix: &String, name:String, r:bool, p:bool) -> bool {
     println!("Ready to rename {suffix} files in {idir}, ==> {name}, with flag, r({r}), p({p})");
@@ -133,50 +180,7 @@ pub fn g_rename(idir: &String, suffix: &String, name:String, r:bool, p:bool) -> 
         }
         return true;
     }
-    let mut rlist:Vec<&PathBuf> = Vec::new();
-    loop {
-        rlist.clear();
-        for (k, v) in domap.iter() {
-            let pbuf = PathBuf::from(v);
-            if pbuf.exists() {
-                continue;
-            }
-            match fs::rename(k, pbuf) {
-                Ok(_v) => {
-                    rlist.push(k);
-                }   
-                Err(e) => {
-                    println!("{}", e);
-                }
-            }
-        }
-        if rlist.len() == domap.len() {
-            break;
-        }
-        if rlist.len() == 0 && domap.len() != 0 {
-            for (k, v) in domap.iter() {
-                match fs::rename(k, get_hash_name(v)) {
-                    Ok(_v) => {}   
-                    Err(e) => {
-                        println!("{}", e);
-                    }
-                }
-            }
-            for (_k, v) in domap.iter() {
-                match fs::rename(get_hash_name(v), v) {
-                    Ok(_v) => {
-                    }   
-                    Err(e) => {
-                        println!("{}", e);
-                    }
-                }
-            }
-            break;
-        }
-        for k in rlist.iter() {
-            domap.remove(k);
-        }
-    }
+    do_rename(domap);
     return true;
 }
 
