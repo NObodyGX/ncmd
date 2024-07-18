@@ -1,6 +1,6 @@
 use std::{
     fs,
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 
 use walkdir::{DirEntry, WalkDir};
@@ -29,7 +29,6 @@ fn scan_files_recursion(idir: &String, depth: usize) -> Vec<PathBuf> {
                         if !entry.file_type().is_file() {
                             continue;
                         }
-                        println!("{}", entry.path().display());
                         mlist.push(entry.path().to_path_buf());
                     }
                     Err(err) => {

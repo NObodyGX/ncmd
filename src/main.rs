@@ -26,6 +26,9 @@ struct RenameArgs {
     /// name special with {num}, {date}, {time}, {timestamp}
     #[arg(short, long)]
     name: Option<String>,
+    /// the renames file suffix, case-insensitive
+    #[arg(short, long)]
+    filter: Option<String>,
     #[arg(long="start", default_value_t=1)]
     start: u8,
     #[arg(long="gap", default_value_t=1)]
@@ -59,14 +62,18 @@ fn main() {
             let idir = rename.idir;
             let name = match rename.name {
                 Some(name) => {name},
-                None => "".to_string(),
+                None => "{num}".to_string(),
             }; 
             let r = rename.recursion;
             let p = rename.preview;
             let mut v: Vec<String> = Vec::new();
+            let suffix = match rename.filter {
+                Some(v) => {v},
+                None => "jpg".to_string(),
+            };
             v.push("jpg".to_string());
             v.push("png".to_string());
-            cmd::g_renames(&idir, &v, name, r, p);
+            cmd::g_rename(&idir, &suffix, name, r, p);
         }
     }
 

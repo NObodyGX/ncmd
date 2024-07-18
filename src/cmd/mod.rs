@@ -1,3 +1,4 @@
 mod rename;
 
-pub use rename::g_renames;
+#[allow(unused_imports)]
+pub use rename::{g_renames, g_rename};

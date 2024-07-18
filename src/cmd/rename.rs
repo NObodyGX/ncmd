@@ -1,13 +1,12 @@
 use crate::utils::scan_files_in_dir;
-use chrono::{Datelike,  Utc};
-use std::{
-    collections::HashMap, fmt::format, fs, hash::DefaultHasher, path::{Path, PathBuf}
-};
+use chrono::{Datelike, Utc};
 use std::hash::{Hash, Hasher};
+use std::{collections::HashMap, fs, hash::DefaultHasher, path::{PathBuf, Path}};
+use ansi_term::Colour::{Green, Red};
 
 const MAX_NUM_LEN: usize = 99;
 
-fn check_exist(name: &String, v:&str) -> bool {
+fn check_exist(name: &String, v: &str) -> bool {
     name.contains(v)
 }
 
@@ -61,6 +60,58 @@ mod tests {
         assert_eq!(check_num_len(&"aaa{num:03f}".to_string()), 3);
         assert_eq!(check_num_len(&"aaa{numasda".to_string()), 0);
     }
+
+    #[test]
+    fn test_path() {
+        let mut files: Vec<PathBuf> = Vec::new();
+        files.push(PathBuf::from("aaa.txt"));
+        files.push(PathBuf::from("bbb.txt"));
+        files.push(PathBuf::from("ccc.txt"));
+        files.push(PathBuf::from("ddd.txt1"));
+        files.push(PathBuf::from("eee.TxT"));
+        let todos: Vec<&PathBuf> = files
+            .iter()
+            .filter(|x| match x.extension() {
+                Some(v) => {v.to_ascii_lowercase().eq("txt")}
+                None => {false}
+            })
+            .collect();
+        println!("len: {}", todos.len());
+    }
+
+    #[test]
+    fn test_color() {
+        let v:String = String::from("askdlajd");
+        println!("{} ===> {}", "aaa", Red.paint(&v));
+    }
+}
+
+fn check_print_repeat(rmaps: &HashMap<&PathBuf, String>) -> bool {
+    if rmaps.len() == 0 {
+        return true;
+    }
+
+    let mut mkeys: Vec<&String> = Vec::new();
+    let mut mrkey: Vec<&String> = Vec::new();
+    
+    for (_k, v) in rmaps.iter() {
+        if mkeys.contains(&v) {
+            mrkey.push(v);
+            continue;
+        }
+        mkeys.push(v);
+    }
+    if mrkey.len() > 0 {
+        for (k, v) in rmaps.iter() {
+            if mrkey.contains(&v) {
+                println!("{} ===> {}", k.to_str().unwrap(), Red.paint(v));
+                continue;
+            }
+            println!("{} ===> {}", k.to_str().unwrap(), Green.paint(v));
+        }
+        return false;
+    }
+    return true;
 }
 
 fn calculate_hash<T: Hash>(t: &T) -> u64 {
@@ -75,7 +126,7 @@ fn get_hash_name(name: &String) -> String {
 }
 
 fn do_rename(mut rmaps: HashMap<&PathBuf, String>) {
-    let mut rmkeys:Vec<&PathBuf> = Vec::new();
+    let mut rmkeys: Vec<&PathBuf> = Vec::new();
     loop {
         rmkeys.clear();
         for (k, v) in rmaps.iter() {
@@ -86,7 +137,7 @@ fn do_rename(mut rmaps: HashMap<&PathBuf, String>) {
             match fs::rename(k, pbuf) {
                 Ok(_v) => {
                     rmkeys.push(k);
-                }   
+                }
                 Err(e) => {
                     println!("{}", e);
                 }
@@ -98,7 +149,7 @@ fn do_rename(mut rmaps: HashMap<&PathBuf, String>) {
         if rmkeys.len() == 0 && rmaps.len() != 0 {
             for (k, v) in rmaps.iter() {
                 match fs::rename(k, get_hash_name(v)) {
-                    Ok(_v) => {}   
+                    Ok(_v) => {}
                     Err(e) => {
                         println!("{}", e);
                     }
@@ -106,8 +157,7 @@ fn do_rename(mut rmaps: HashMap<&PathBuf, String>) {
             }
             for (_k, v) in rmaps.iter() {
                 match fs::rename(get_hash_name(v), v) {
-                    Ok(_v) => {
-                    }   
+                    Ok(_v) => {}
                     Err(e) => {
                         println!("{}", e);
                     }
@@ -122,13 +172,19 @@ fn do_rename(mut rmaps: HashMap<&PathBuf, String>) {
 }
 
 #[allow(dead_code)]
-pub fn g_rename(idir: &String, suffix: &String, name:String, r:bool, p:bool) -> bool {
+pub fn g_rename(idir: &String, suffix: &String, name: String, r: bool, p: bool) -> bool {
     println!("Ready to rename {suffix} files in {idir}, ==> {name}, with flag, r({r}), p({p})");
     let files = scan_files_in_dir(&idir, r);
     if files.len() == 0 {
         return false;
     }
-    let todos: Vec<&PathBuf> = files.iter().filter(| x | x.as_path().ends_with(suffix)).collect();
+    let todos: Vec<&PathBuf> = files
+            .iter()
+            .filter(|x| match x.extension() {
+                Some(v) => {v.to_ascii_lowercase().eq(suffix.as_str())}
+                None => {false}
+            })
+            .collect();
     let now = Utc::now();
 
     let lowername = name.to_lowercase();
@@ -140,7 +196,7 @@ pub fn g_rename(idir: &String, suffix: &String, name:String, r:bool, p:bool) -> 
     } else {
         name.clone()
     };
-    let numlen = check_num_len(&lowername);
+    let numlen: usize = std::cmp::min(check_num_len(&lowername), todos.len().to_string().len());
     let mut start: usize = 1;
     let mut domap: HashMap<&PathBuf, String> = HashMap::with_capacity(todos.len());
     for v in todos.iter() {
@@ -160,23 +216,15 @@ pub fn g_rename(idir: &String, suffix: &String, name:String, r:bool, p:bool) -> 
         }
         domap.insert(v, npath);
     }
-    // check is repeat
-    if domap.len() > 0 {
-        let mut tlist:Vec<&String> = Vec::new();
-        for (_k, v) in domap.iter() {
-            tlist.push(v);
-        }
-        tlist.sort();
-        for i in 0..tlist.len() -1 {
-            if tlist[i].eq(tlist[i+1]) {
-                return false;
-            }
-        }
+    // check whether is repeat, print if error
+    if !check_print_repeat(&domap) {
+        return false;
     }
+    
     // preview only
     if p {
         for (k, v) in domap.iter() {
-            println!("{} ===> {}", k.to_str().unwrap(), v);
+            println!("{} ===> {}", k.to_str().unwrap(), Green.paint(v));
         }
         return true;
     }
@@ -184,6 +232,7 @@ pub fn g_rename(idir: &String, suffix: &String, name:String, r:bool, p:bool) -> 
     return true;
 }
 
+#[allow(dead_code)]
 pub fn g_renames(idir: &String, isuffixs: &Vec<String>, name: String, r: bool, p: bool) -> bool {
     println!("Ready to rename files in {idir}, ==> {name}, with flag, r({r}), p({p})");
 
