@@ -1,8 +1,9 @@
 use crate::utils::scan_files_in_dir;
 use ansi_term::Colour::{Green, Red};
 use chrono::{Datelike, Utc};
+use clap::builder::Str;
 use indexmap::IndexMap;
-use std::cmp::{max, min};
+use std::cmp::max;
 use std::hash::{Hash, Hasher};
 use std::{fs, hash::DefaultHasher, path::PathBuf};
 
@@ -23,7 +24,7 @@ fn get_num_str(name: &String) -> String {
     let aftername = &name[sn..];
     match aftername.find("}") {
         Some(v) => {
-            return name[sn..sn + v+1].to_string();
+            return name[sn..sn + v + 1].to_string();
         }
         None => {
             return name[sn..].to_string() + "}";
@@ -67,10 +68,22 @@ mod tests {
 
     #[test]
     fn test_get_num() {
-        assert_eq!(check_num(&"aaa{num}".to_string()), ("{num}".to_string(), 99));
-        assert_eq!(check_num(&"aaa{num:2}".to_string()), ("{num:2}".to_string(), 2));
-        assert_eq!(check_num(&"aaa{num:03d}".to_string()), ("{num:03d}".to_string(), 3));
-        assert_eq!(check_num(&"aaa{num:03f}".to_string()), ("{num:03f}".to_string(), 3));
+        assert_eq!(
+            check_num(&"aaa{num}".to_string()),
+            ("{num}".to_string(), 99)
+        );
+        assert_eq!(
+            check_num(&"aaa{num:2}".to_string()),
+            ("{num:2}".to_string(), 2)
+        );
+        assert_eq!(
+            check_num(&"aaa{num:03d}".to_string()),
+            ("{num:03d}".to_string(), 3)
+        );
+        assert_eq!(
+            check_num(&"aaa{num:03f}".to_string()),
+            ("{num:03f}".to_string(), 3)
+        );
         assert_eq!(check_num(&"aaa{numasda".to_string()), ("".to_string(), 0));
     }
 
@@ -97,6 +110,30 @@ mod tests {
         let v: String = String::from("askdlajd");
         println!("{} ===> {}", "aaa", Red.paint(&v));
     }
+    #[test]
+    fn test_rename() {
+        g_rename(
+            &"target/test".to_string(),
+            &"jpg".to_string(),
+            "{num}".to_string(),
+            -99,
+            -3,
+            true,
+            true,
+        );
+    }
+}
+
+fn predo_name(name: &String) -> String {
+    let now = Utc::now();
+    let cdate = format!("{}-{:02}-{:02}", now.year(), now.month(), now.day());
+    let dateflag = check_exist(&name, "{date}");
+    let nname = if dateflag {
+        name.replace("{date}", &cdate)
+    } else {
+        name.clone()
+    };
+    return nname;
 }
 
 fn check_print_repeat(rmaps: &IndexMap<&PathBuf, String>) -> bool {
@@ -185,7 +222,15 @@ fn do_rename(mut rmaps: IndexMap<&PathBuf, String>) {
 }
 
 #[allow(dead_code)]
-pub fn g_rename(idir: &String, suffix: &String, name: String, r: bool, p: bool) -> bool {
+pub fn g_rename(
+    idir: &String,
+    suffix: &String,
+    name: String,
+    start: i8,
+    gap: i8,
+    r: bool,
+    p: bool,
+) -> bool {
     println!("Ready to rename {suffix} files in {idir}, ==> {name}, with flag, r({r}), p({p})");
     let files = scan_files_in_dir(&idir, r);
     if files.len() == 0 {
@@ -198,35 +243,48 @@ pub fn g_rename(idir: &String, suffix: &String, name: String, r: bool, p: bool) 
             None => false,
         })
         .collect();
-    let now = Utc::now();
 
-    let lowername = name.to_lowercase();
-    let cdate = format!("{}-{:02}-{:02}", now.year(), now.month(), now.day());
-    let timeflag = check_exist(&lowername, "{time}");
-    let dateflag = check_exist(&lowername, "{date}");
-    let nname = if dateflag {
-        name.replace("{date}", &cdate)
+    let rname = predo_name(&name);
+    let timeflag = check_exist(&name, "{time}");
+    let fileflag = check_exist(&name, "{file}");
+
+    let (numhold, numlen) = check_num(&name);
+    let numlen = if numlen == MAX_NUM_LEN {
+        max(todos.len().to_string().len(), 2)
     } else {
-        name.clone()
+        numlen
     };
-    let (numhold, numlen) = check_num(&lowername);
-    let numlen =  if numlen == MAX_NUM_LEN {max(todos.len(), 2)} else {numlen};
-    let mut start: usize = 1;
+    let mut index: i8 = start;
     let mut domap: IndexMap<&PathBuf, String> = IndexMap::with_capacity(todos.len());
     for v in todos.iter() {
-        let mut npath = nname.clone();
+        let mut npath = rname.clone();
         if timeflag {
             let now = Utc::now();
             let ntime = format!("{}", now.timestamp_millis());
             npath = npath.replace("{time}", &ntime);
         }
+        if fileflag {
+            npath = npath.replace("{file}", v.file_stem().unwrap().to_str().unwrap());
+        }
         if numlen > 0 {
-            let mut num = start.to_string();
-            if numlen > num.len() {
-                num = "0".repeat(numlen - num.len()) + &num;
-            }
-            npath = npath.replace(&numhold, &num);
-            start += 1;
+            let snum: String = if index >= 0 {
+                let nn = index.to_string().len();
+                if numlen > nn {
+                    format!("{}{}", "0".repeat(numlen - nn), index)
+                } else {
+                    index.to_string()
+                }
+            } else {
+                let index: i8 = 0 - index;
+                let nn = index.to_string().len();
+                if numlen > nn {
+                    format!("-{}{}", "0".repeat(numlen - nn), index)
+                } else {
+                    format!("-{}", index)
+                }
+            };
+            npath = npath.replace(&numhold, &snum);
+            index += gap;
         }
         if !npath.ends_with(suffix) {
             npath += ".";
