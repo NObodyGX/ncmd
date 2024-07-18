@@ -1,8 +1,10 @@
 use crate::utils::scan_files_in_dir;
-use chrono::{Datelike, Utc};
-use std::hash::{Hash, Hasher};
-use std::{collections::HashMap, fs, hash::DefaultHasher, path::{PathBuf, Path}};
 use ansi_term::Colour::{Green, Red};
+use chrono::{Datelike, Utc};
+use indexmap::IndexMap;
+use std::cmp::{max, min};
+use std::hash::{Hash, Hasher};
+use std::{fs, hash::DefaultHasher, path::PathBuf};
 
 const MAX_NUM_LEN: usize = 99;
 
@@ -10,41 +12,52 @@ fn check_exist(name: &String, v: &str) -> bool {
     name.contains(v)
 }
 
-fn check_num_len(name: &String) -> usize {
-    let numflag = name.contains("{num");
-    let mut numlen: usize = 0;
-    if !numflag {
-        return numlen;
-    }
+fn get_num_str(name: &String) -> String {
     if name.contains("{num}") {
-        return MAX_NUM_LEN;
+        return "{num}".to_string();
     }
     if !name.contains("{num:") {
-        return 0;
+        return "".to_string();
     }
-    numlen = MAX_NUM_LEN;
-    match name.find("{num:") {
+    let sn = name.find("{num:").unwrap();
+    let aftername = &name[sn..];
+    match aftername.find("}") {
         Some(v) => {
-            let nn = &name[v + 5..];
-            let vv = nn.find("}").unwrap();
-            let nnn = &nn.to_string()[..vv];
-            numlen = 0;
-            for c in nnn.chars() {
-                if !c.is_ascii_digit() {
-                    if c == 'd' || c == 'f' {
-                        break;
-                    }
-                    return 0;
-                }
-                numlen = numlen * 10 + c.to_digit(10).unwrap() as usize;
-            }
-            if numlen == 0 {
-                numlen = MAX_NUM_LEN;
-            }
+            return name[sn..sn + v+1].to_string();
         }
-        None => {}
+        None => {
+            return name[sn..].to_string() + "}";
+        }
     }
-    numlen
+}
+
+fn check_num(name: &String) -> (String, usize) {
+    let numhold = get_num_str(name);
+    let pv = "{num:".len();
+    if numhold == "{num}" {
+        return (numhold, MAX_NUM_LEN);
+    }
+    if numhold.len() <= pv {
+        return (numhold, 0);
+    }
+    if !numhold.contains("}") {
+        return (numhold, 0);
+    }
+    let dv = numhold.find("}").unwrap();
+    let numstr = &numhold[pv..dv];
+
+    let mut numlen = 0;
+    for c in numstr.chars() {
+        if !c.is_ascii_digit() {
+            if c == 'd' || c == 'f' {
+                break;
+            }
+            return ("".to_string(), 0);
+        }
+        numlen = numlen * 10 + c.to_digit(10).unwrap() as usize;
+    }
+
+    (numhold, numlen)
 }
 
 #[cfg(test)]
@@ -54,11 +67,11 @@ mod tests {
 
     #[test]
     fn test_get_num() {
-        assert_eq!(check_num_len(&"aaa{num}".to_string()), 99);
-        assert_eq!(check_num_len(&"aaa{num:2}".to_string()), 2);
-        assert_eq!(check_num_len(&"aaa{num:03d}".to_string()), 3);
-        assert_eq!(check_num_len(&"aaa{num:03f}".to_string()), 3);
-        assert_eq!(check_num_len(&"aaa{numasda".to_string()), 0);
+        assert_eq!(check_num(&"aaa{num}".to_string()), ("{num}".to_string(), 99));
+        assert_eq!(check_num(&"aaa{num:2}".to_string()), ("{num:2}".to_string(), 2));
+        assert_eq!(check_num(&"aaa{num:03d}".to_string()), ("{num:03d}".to_string(), 3));
+        assert_eq!(check_num(&"aaa{num:03f}".to_string()), ("{num:03f}".to_string(), 3));
+        assert_eq!(check_num(&"aaa{numasda".to_string()), ("".to_string(), 0));
     }
 
     #[test]
@@ -72,8 +85,8 @@ mod tests {
         let todos: Vec<&PathBuf> = files
             .iter()
             .filter(|x| match x.extension() {
-                Some(v) => {v.to_ascii_lowercase().eq("txt")}
-                None => {false}
+                Some(v) => v.to_ascii_lowercase().eq("txt"),
+                None => false,
             })
             .collect();
         println!("len: {}", todos.len());
@@ -81,19 +94,19 @@ mod tests {
 
     #[test]
     fn test_color() {
-        let v:String = String::from("askdlajd");
+        let v: String = String::from("askdlajd");
         println!("{} ===> {}", "aaa", Red.paint(&v));
     }
 }
 
-fn check_print_repeat(rmaps: &HashMap<&PathBuf, String>) -> bool {
+fn check_print_repeat(rmaps: &IndexMap<&PathBuf, String>) -> bool {
     if rmaps.len() == 0 {
         return true;
     }
 
     let mut mkeys: Vec<&String> = Vec::new();
     let mut mrkey: Vec<&String> = Vec::new();
-    
+
     for (_k, v) in rmaps.iter() {
         if mkeys.contains(&v) {
             mrkey.push(v);
@@ -125,7 +138,7 @@ fn get_hash_name(name: &String) -> String {
     format!("{}_{}", name, hashd)
 }
 
-fn do_rename(mut rmaps: HashMap<&PathBuf, String>) {
+fn do_rename(mut rmaps: IndexMap<&PathBuf, String>) {
     let mut rmkeys: Vec<&PathBuf> = Vec::new();
     loop {
         rmkeys.clear();
@@ -166,7 +179,7 @@ fn do_rename(mut rmaps: HashMap<&PathBuf, String>) {
             break;
         }
         for k in rmkeys.iter() {
-            rmaps.remove(k);
+            rmaps.shift_remove(k);
         }
     }
 }
@@ -179,12 +192,12 @@ pub fn g_rename(idir: &String, suffix: &String, name: String, r: bool, p: bool) 
         return false;
     }
     let todos: Vec<&PathBuf> = files
-            .iter()
-            .filter(|x| match x.extension() {
-                Some(v) => {v.to_ascii_lowercase().eq(suffix.as_str())}
-                None => {false}
-            })
-            .collect();
+        .iter()
+        .filter(|x| match x.extension() {
+            Some(v) => v.to_ascii_lowercase().eq(suffix.as_str()),
+            None => false,
+        })
+        .collect();
     let now = Utc::now();
 
     let lowername = name.to_lowercase();
@@ -196,9 +209,10 @@ pub fn g_rename(idir: &String, suffix: &String, name: String, r: bool, p: bool) 
     } else {
         name.clone()
     };
-    let numlen: usize = std::cmp::min(check_num_len(&lowername), todos.len().to_string().len());
+    let (numhold, numlen) = check_num(&lowername);
+    let numlen =  if numlen == MAX_NUM_LEN {max(todos.len(), 2)} else {numlen};
     let mut start: usize = 1;
-    let mut domap: HashMap<&PathBuf, String> = HashMap::with_capacity(todos.len());
+    let mut domap: IndexMap<&PathBuf, String> = IndexMap::with_capacity(todos.len());
     for v in todos.iter() {
         let mut npath = nname.clone();
         if timeflag {
@@ -211,8 +225,12 @@ pub fn g_rename(idir: &String, suffix: &String, name: String, r: bool, p: bool) 
             if numlen > num.len() {
                 num = "0".repeat(numlen - num.len()) + &num;
             }
-            npath = npath.replace("{num}", &num);
+            npath = npath.replace(&numhold, &num);
             start += 1;
+        }
+        if !npath.ends_with(suffix) {
+            npath += ".";
+            npath += suffix;
         }
         domap.insert(v, npath);
     }
@@ -220,7 +238,7 @@ pub fn g_rename(idir: &String, suffix: &String, name: String, r: bool, p: bool) 
     if !check_print_repeat(&domap) {
         return false;
     }
-    
+
     // preview only
     if p {
         for (k, v) in domap.iter() {
@@ -272,7 +290,7 @@ pub fn g_renames(idir: &String, isuffixs: &Vec<String>, name: String, r: bool, p
     if dateflag {
         nname = name.replace("{date}", &cdate);
     }
-    let numlen = check_num_len(&lname);
+    let numlen = check_num(&lname);
     let mut start: usize = 1;
     for (i, _suffix) in isuffixs.iter().enumerate() {
         let mlist = todolist.get(i).unwrap();
@@ -285,14 +303,6 @@ pub fn g_renames(idir: &String, isuffixs: &Vec<String>, name: String, r: bool, p
                 let now = Utc::now();
                 let ntime = format!("{}", now.timestamp_millis());
                 npath = npath.replace("{time}", &ntime);
-            }
-            if numlen > 0 {
-                let mut num = start.to_string();
-                if numlen > num.len() {
-                    num = "0".repeat(numlen - num.len()) + &num;
-                }
-                npath = npath.replace("{num}", &num);
-                start += 1;
             }
             fs::rename(v, npath).unwrap();
         }
