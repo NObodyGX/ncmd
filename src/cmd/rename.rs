@@ -1,7 +1,6 @@
 use crate::utils::scan_files_in_dir;
 use ansi_term::Colour::{Green, Red};
 use chrono::{Datelike, Utc};
-use clap::builder::Str;
 use indexmap::IndexMap;
 use std::cmp::max;
 use std::hash::{Hash, Hasher};
@@ -59,69 +58,6 @@ fn check_num(name: &String) -> (String, usize) {
     }
 
     (numhold, numlen)
-}
-
-#[cfg(test)]
-mod tests {
-    // 注意这个惯用法：在 tests 模块中，从外部作用域导入所有名字。
-    use super::*;
-
-    #[test]
-    fn test_get_num() {
-        assert_eq!(
-            check_num(&"aaa{num}".to_string()),
-            ("{num}".to_string(), 99)
-        );
-        assert_eq!(
-            check_num(&"aaa{num:2}".to_string()),
-            ("{num:2}".to_string(), 2)
-        );
-        assert_eq!(
-            check_num(&"aaa{num:03d}".to_string()),
-            ("{num:03d}".to_string(), 3)
-        );
-        assert_eq!(
-            check_num(&"aaa{num:03f}".to_string()),
-            ("{num:03f}".to_string(), 3)
-        );
-        assert_eq!(check_num(&"aaa{numasda".to_string()), ("".to_string(), 0));
-    }
-
-    #[test]
-    fn test_path() {
-        let mut files: Vec<PathBuf> = Vec::new();
-        files.push(PathBuf::from("aaa.txt"));
-        files.push(PathBuf::from("bbb.txt"));
-        files.push(PathBuf::from("ccc.txt"));
-        files.push(PathBuf::from("ddd.txt1"));
-        files.push(PathBuf::from("eee.TxT"));
-        let todos: Vec<&PathBuf> = files
-            .iter()
-            .filter(|x| match x.extension() {
-                Some(v) => v.to_ascii_lowercase().eq("txt"),
-                None => false,
-            })
-            .collect();
-        println!("len: {}", todos.len());
-    }
-
-    #[test]
-    fn test_color() {
-        let v: String = String::from("askdlajd");
-        println!("{} ===> {}", "aaa", Red.paint(&v));
-    }
-    #[test]
-    fn test_rename() {
-        g_rename(
-            &"target/test".to_string(),
-            &"jpg".to_string(),
-            "{num}".to_string(),
-            -99,
-            -3,
-            true,
-            true,
-        );
-    }
 }
 
 fn predo_name(name: &String) -> String {
@@ -317,54 +253,68 @@ pub fn g_renames(idir: &String, isuffixs: &Vec<String>, name: String, r: bool, p
         let mlist = Vec::new();
         todolist.push(mlist);
     }
-
-    let path = fs::canonicalize(idir);
-    match path {
-        Ok(path) => {
-            if !path.exists() {
-                return false;
-            }
-            let files = scan_files_in_dir(&idir, r);
-            for fbuf in files.iter() {
-                for (i, suffix) in isuffixs.iter().enumerate() {
-                    if fbuf.as_path().ends_with(suffix) {
-                        todolist[i].push(fbuf.clone());
-                        break;
-                    }
-                }
-            }
-        }
-        Err(e) => {
-            println!("{e}\nerror: {idir}.");
-        }
-    }
-
-    let now = Utc::now();
-    let lname = name.to_lowercase();
-    let mut nname = name.clone();
-    let cdate = format!("{}-{:02}-{:02}", now.year(), now.month(), now.day());
-    let timeflag = check_exist(&lname, "{time}");
-    let dateflag = check_exist(&lname, "{date}");
-    if dateflag {
-        nname = name.replace("{date}", &cdate);
-    }
-    let numlen = check_num(&lname);
-    let mut start: usize = 1;
-    for (i, _suffix) in isuffixs.iter().enumerate() {
-        let mlist = todolist.get(i).unwrap();
-        if mlist.len() == 0 {
-            continue;
-        }
-        for v in mlist.iter() {
-            let mut npath = nname.clone();
-            if timeflag {
-                let now = Utc::now();
-                let ntime = format!("{}", now.timestamp_millis());
-                npath = npath.replace("{time}", &ntime);
-            }
-            fs::rename(v, npath).unwrap();
-        }
-    }
-
     return true;
+}
+
+#[cfg(test)]
+mod tests {
+    // 注意这个惯用法：在 tests 模块中，从外部作用域导入所有名字。
+    use super::*;
+
+    #[test]
+    fn test_get_num() {
+        assert_eq!(
+            check_num(&"aaa{num}".to_string()),
+            ("{num}".to_string(), 99)
+        );
+        assert_eq!(
+            check_num(&"aaa{num:2}".to_string()),
+            ("{num:2}".to_string(), 2)
+        );
+        assert_eq!(
+            check_num(&"aaa{num:03d}".to_string()),
+            ("{num:03d}".to_string(), 3)
+        );
+        assert_eq!(
+            check_num(&"aaa{num:03f}".to_string()),
+            ("{num:03f}".to_string(), 3)
+        );
+        assert_eq!(check_num(&"aaa{numasda".to_string()), ("".to_string(), 0));
+    }
+
+    #[test]
+    fn test_path() {
+        let mut files: Vec<PathBuf> = Vec::new();
+        files.push(PathBuf::from("aaa.txt"));
+        files.push(PathBuf::from("bbb.txt"));
+        files.push(PathBuf::from("ccc.txt"));
+        files.push(PathBuf::from("ddd.txt1"));
+        files.push(PathBuf::from("eee.TxT"));
+        let todos: Vec<&PathBuf> = files
+            .iter()
+            .filter(|x| match x.extension() {
+                Some(v) => v.to_ascii_lowercase().eq("txt"),
+                None => false,
+            })
+            .collect();
+        assert_eq!(todos.len(), 4);
+    }
+
+    #[test]
+    fn test_color() {
+        let v: String = String::from("askdlajd");
+        println!("{} ===> {}", "aaa", Red.paint(&v));
+    }
+    #[test]
+    fn test_rename() {
+        g_rename(
+            &"target/test".to_string(),
+            &"jpg".to_string(),
+            "{num}".to_string(),
+            -99,
+            -3,
+            true,
+            true,
+        );
+    }
 }
